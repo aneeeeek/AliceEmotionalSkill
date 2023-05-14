@@ -12,16 +12,18 @@ answerNumber = 0
 app = Flask(__name__)
 
 goodScore, neutralScore, badScore = 0, 0, 0
-
+textID_arr, yesNoGoodID_arr, yesNoBadID_arr, numberID_arr= [], [], [], []
 
 @app.route("/alice", methods=["POST"])
 def main():
     global answerNumber
     text = request.json.get('request', {}).get('original_utterance')
     # todo проверять, тот ли пользователь проходит тест
+    # todo сделать графики после статистики
+    # todo проверить че будет если я напишу текст на английском)))))))))
 
     if isExitText(text):
-        return response("До встречи!", False)
+        return response("До встречи!", True)
 
     # TODO присваивать баллы в текстовом в зависимости от уверенности нейронки ???
 
@@ -36,7 +38,9 @@ def main():
         if answerNumber == 0:
             if text.lower() == 'давай':
                 answerNumber += 1
-                return response(questions.get_baq(random.randint(0, questions.get_size_baq() - 1)), False)
+                id = random.randint(0, questions.get_size_baq() - 1)
+                textID_arr.append(id)
+                return response(questions.get_baq(id), False)
             else:
                 return response("Ну и пока", True)
 
@@ -44,16 +48,16 @@ def main():
         elif answerNumber == 1:
             addScoreForText(getSentiment(text))
             answerNumber += 1
-
-            # TODO посмотреть на скоры и в зависимости от них задать следующий вопрос
-            return response(questions.get_neq(random.randint(0, questions.get_size_neq() - 1)), False)
+            return responseFromScore()
 
         # ответ на вопрос да/нет/возможно 1
         elif answerNumber == 2:
-            # TODO проверить что сказал то что нужно - если нет, попросить повторить ответ в заданной форме
-
-            answerNumber += 1
-            return response(questions.get_rq(random.randint(0, questions.get_size_rq() - 1)), False)
+            if text == 'да' or text=='нет':
+                #addScoreForYesNo(text)
+                answerNumber += 1
+                return response(questions.get_rq(random.randint(0, questions.get_size_rq() - 1)), False)
+            else:
+                return response("Ответьте словами ДА или НЕТ", False)
 
         # ответ на вопрос числом 1
         elif answerNumber == 3:
@@ -79,7 +83,7 @@ def main():
                     addScoreForNumeric(int(text))
                     answerNumber += 1
                     # TODO посмотреть на скоры и в зависимости от них задать следующий вопрос
-                    return response(questions.get_neq(random.randint(0, questions.get_size_neq() - 1)), False)
+                    return response(questions.get_neq_good(random.randint(0, questions.get_size_neq_good() - 1)), False)
             else:
                 return response("Ответьте целым числом в заданном диапазоне: от 1 до 5", False)
 
@@ -88,15 +92,15 @@ def main():
             # TODO проверить что сказал то что нужно - если нет, попросить повторить ответ в заданной форме
             answerNumber += 1
             # TODO посмотреть на скоры и в зависимости от них задать следующий вопрос
-            return response(questions.get_neq(random.randint(0, questions.get_size_neq() - 1)), False)
+            return response(questions.get_neq_good(random.randint(0, questions.get_size_neq_good() - 1)), False)
 
         # ответ на вопрос да/нет/возможно 3
         else:
             # TODO проверить что сказал то что нужно - если нет, попросить повторить ответ в заданной форме
 
-            # TODO посчитать результаты, объявить их
+
             result = getMaxScore(goodScore, neutralScore, badScore)
-            allScore = "Вы набрали " + str(goodScore) + " положительных баллов, " + str(neutralScore) + " нейтральных баллов, " + str(badScore) + " негативных баллов, "
+            allScore = "На основе анализа вашего настроения " #"Вы набрали " + str(goodScore) + " положительных баллов, " + str(neutralScore) + " нейтральных баллов, " + str(badScore) + " негативных баллов, "
             if result == "goodScore":
                 return response(
                     allScore + "можно сделать вывод, что Вы чувствуете себя хорошо! Сохраняйте позитивный настрой!",
@@ -145,6 +149,35 @@ def getMaxScore(goodScore, neutralScore, badScore):
     elif maxScore == badScore:
         return "badScore"
 
+def responseFromScore():
+    result = getMaxScore(goodScore,neutralScore,badScore)
+    if result == "goodScore":
+        while 1:
+            id = random.randint(0, questions.get_size_neq_good() - 1)
+            if id not in yesNoGoodID_arr:
+                yesNoGoodID_arr.append(id)
+                return response(questions.get_neq_good(id), False)
+    elif result == "badScore":
+        while 1:
+            id = random.randint(0, questions.get_size_neq_bad() - 1)
+            if id not in yesNoBadID_arr:
+                yesNoBadID_arr.append(id)
+                return response(questions.get_neq_bad(id), False)
+    else:
+        res = random.randint(0, 1)
+        if res == 0:
+            while 1:
+                id = random.randint(0, questions.get_size_neq_good() - 1)
+                if id not in yesNoGoodID_arr:
+                    yesNoGoodID_arr.append(id)
+                    return response(questions.get_neq_good(id), False)
+        else:
+            while 1:
+                id = random.randint(0, questions.get_size_neq_bad() - 1)
+                if id not in yesNoBadID_arr:
+                    yesNoBadID_arr.append(id)
+                    return response(questions.get_neq_bad(id), False)
+
 
 def getSentiment(text):
     tokenizer = RegexTokenizer()
@@ -173,6 +206,8 @@ def addScoreForNumeric(result):
         neutralScore += result
     elif result == 1 or result == 2:
         badScore += result
+
+#def addScoreForYesNo(result):
 
 
 app.run('0.0.0.0', port=5000, debug=True)
