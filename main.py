@@ -1,6 +1,5 @@
 import random
 from flask import Flask, request
-import questions
 import answers
 import dbConnection
 import enum
@@ -43,7 +42,7 @@ def main():
 
         # ответ на текстовый вопрос 1
         elif answerNumber == 1:
-            addScoreForText(getSentiment(text))
+            #addScoreForText(getSentiment(text))
             answerNumber += 1
             return response(getBinaryQuestion(), False)
 
@@ -52,7 +51,7 @@ def main():
             if text == 'да' or text=='нет':
                 #addScoreForYesNo(text)
                 answerNumber += 1
-                return response(questions.get_rq(random.randint(0, questions.get_size_rq() - 1)), False)
+                return response(getRatingQuestion(), False)
             else:
                 return response("Ответьте словами ДА или НЕТ", False)
 
@@ -71,7 +70,7 @@ def main():
             addScoreForText(getSentiment(text))
             getSentiment(text)
             answerNumber += 1
-            return response(questions.get_rq(random.randint(0, questions.get_size_rq() - 1)), False)
+            return response(getRatingQuestion(), False)
 
         # ответ на вопрос числом 2
         elif answerNumber == 5:
@@ -80,7 +79,7 @@ def main():
                     addScoreForNumeric(int(text))
                     answerNumber += 1
                     # TODO посмотреть на скоры и в зависимости от них задать следующий вопрос
-                    return response(questions.get_neq_good(random.randint(0, questions.get_size_neq_good() - 1)), False)
+                    return response(getBinaryQuestion(), False)
             else:
                 return response("Ответьте целым числом в заданном диапазоне: от 1 до 5", False)
 
@@ -116,20 +115,12 @@ def main():
 def getTextQuestion():
     # Получить индексы всех вопросов текстового типа
     idList = dbConnection.getIDTextQuestions()
+    return returnQuestionText(idList)
 
-    # Выбрать случайный неповторяющийся индекс вопроса и записать его
-    idRandom = random.choice(idList)
-    while idRandom in usedIDs:
-        idRandom = random.choice(idList)
-    usedIDs.append(idRandom)
-
-    # Получить текст вопроса по индексу
-    textList = dbConnection.getQuestion(int(idRandom[0]))
-    question = textList[0]
-    return str(question[0])
-
+# === Получить вопрос с ответом ДА/НЕТ, который ранее не задавался пользователю ===
 def getBinaryQuestion():
     result = getMaxScore(goodScore,neutralScore,badScore)
+    # Получить индексы всех вопросов в зависимости от результата
     if result == "goodScore":
         idList = dbConnection.getIDBinaryGoodQuestions()
     elif result == "badScore":
@@ -140,15 +131,31 @@ def getBinaryQuestion():
         else:
             idList = dbConnection.getIDBinaryBadQuestions()
 
+    return returnQuestionText(idList)
+
+# === Получить текстовый вопрос, который ранее не задавался пользователю ===
+def getRatingQuestion():
+    if answerNumber == 3:
+        idList = dbConnection.getIDRatingAnxietyQuestions()
+    elif answerNumber == 6:
+        idList = dbConnection.getIDRatingFrustrationQuestions()
+    elif answerNumber == 9:
+        idList = dbConnection.getIDRatingAgressivnessQuestions()
+    else:
+        idList = dbConnection.getIDRatingRigidityQuestions()
+
+    return returnQuestionText(idList)
+
+def returnQuestionText(idList):
+    # Выбрать случайный неповторяющийся индекс вопроса и записать его
     idRandom = random.choice(idList)
     while idRandom in usedIDs:
         idRandom = random.choice(idList)
     usedIDs.append(idRandom)
+    # Получить текст вопроса по индексу
     textList = dbConnection.getQuestion(int(idRandom[0]))
     question = textList[0]
     return str(question[0])
-
-
 
 def response(text, end_session):
     return {
