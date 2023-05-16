@@ -2,6 +2,7 @@ import random
 from flask import Flask, request
 import questions
 import answers
+import dbConnection
 import enum
 
 from dostoevsky.tokenization import RegexTokenizer
@@ -12,20 +13,18 @@ answerNumber = 0
 app = Flask(__name__)
 
 goodScore, neutralScore, badScore = 0, 0, 0
-textID_arr, yesNoGoodID_arr, yesNoBadID_arr, numberID_arr= [], [], [], []
+usedIDs = []
 
 @app.route("/alice", methods=["POST"])
 def main():
+    #todo update session
     global answerNumber
     text = request.json.get('request', {}).get('original_utterance')
+
     # todo проверять, тот ли пользователь проходит тест
-    # todo сделать графики после статистики
-    # todo проверить че будет если я напишу текст на английском)))))))))
 
     if isExitText(text):
         return response("До встречи!", True)
-
-    # TODO присваивать баллы в текстовом в зависимости от уверенности нейронки ???
 
     # диалог с пользователем начался
     if request.json.get('session', {}).get('new'):
@@ -38,9 +37,7 @@ def main():
         if answerNumber == 0:
             if text.lower() == 'давай':
                 answerNumber += 1
-                id = random.randint(0, questions.get_size_baq() - 1)
-                textID_arr.append(id)
-                return response(questions.get_baq(id), False)
+                return response(getTextQuestion(), False)
             else:
                 return response("Ну и пока", True)
 
@@ -48,7 +45,7 @@ def main():
         elif answerNumber == 1:
             addScoreForText(getSentiment(text))
             answerNumber += 1
-            return responseFromScore()
+            return response(getBinaryQuestion(), False)
 
         # ответ на вопрос да/нет/возможно 1
         elif answerNumber == 2:
@@ -65,7 +62,7 @@ def main():
                 if 5 >= int(text) >= 1:
                     addScoreForNumeric(int(text))
                     answerNumber += 1
-                    return response(questions.get_baq(random.randint(0, questions.get_size_baq() - 1)), False)
+                    return response(getTextQuestion(), False)
             else:
                 return response("Ответьте целым числом в заданном диапазоне: от 1 до 5", False)
 
@@ -92,7 +89,7 @@ def main():
             # TODO проверить что сказал то что нужно - если нет, попросить повторить ответ в заданной форме
             answerNumber += 1
             # TODO посмотреть на скоры и в зависимости от них задать следующий вопрос
-            return response(questions.get_neq_good(random.randint(0, questions.get_size_neq_good() - 1)), False)
+            return response(getBinaryQuestion(), False)
 
         # ответ на вопрос да/нет/возможно 3
         else:
@@ -113,6 +110,44 @@ def main():
                 return response(
                     allScore + "можно сделать вывод, что Вы чувствуете себя плохо! Не бойтесь, черные полосы всегда проходят!",
                     True)  # закончить сессию
+
+
+# === Получить текстовый вопрос, который ранее не задавался пользователю ===
+def getTextQuestion():
+    # Получить индексы всех вопросов текстового типа
+    idList = dbConnection.getIDTextQuestions()
+
+    # Выбрать случайный неповторяющийся индекс вопроса и записать его
+    idRandom = random.choice(idList)
+    while idRandom in usedIDs:
+        idRandom = random.choice(idList)
+    usedIDs.append(idRandom)
+
+    # Получить текст вопроса по индексу
+    textList = dbConnection.getQuestion(int(idRandom[0]))
+    question = textList[0]
+    return str(question[0])
+
+def getBinaryQuestion():
+    result = getMaxScore(goodScore,neutralScore,badScore)
+    if result == "goodScore":
+        idList = dbConnection.getIDBinaryGoodQuestions()
+    elif result == "badScore":
+        idList = dbConnection.getIDBinaryBadQuestions()
+    else:
+        if random.randint(0,1):
+            idList = dbConnection.getIDBinaryGoodQuestions()
+        else:
+            idList = dbConnection.getIDBinaryBadQuestions()
+
+    idRandom = random.choice(idList)
+    while idRandom in usedIDs:
+        idRandom = random.choice(idList)
+    usedIDs.append(idRandom)
+    textList = dbConnection.getQuestion(int(idRandom[0]))
+    question = textList[0]
+    return str(question[0])
+
 
 
 def response(text, end_session):
@@ -148,35 +183,6 @@ def getMaxScore(goodScore, neutralScore, badScore):
             return "neutralScore"
     elif maxScore == badScore:
         return "badScore"
-
-def responseFromScore():
-    result = getMaxScore(goodScore,neutralScore,badScore)
-    if result == "goodScore":
-        while 1:
-            id = random.randint(0, questions.get_size_neq_good() - 1)
-            if id not in yesNoGoodID_arr:
-                yesNoGoodID_arr.append(id)
-                return response(questions.get_neq_good(id), False)
-    elif result == "badScore":
-        while 1:
-            id = random.randint(0, questions.get_size_neq_bad() - 1)
-            if id not in yesNoBadID_arr:
-                yesNoBadID_arr.append(id)
-                return response(questions.get_neq_bad(id), False)
-    else:
-        res = random.randint(0, 1)
-        if res == 0:
-            while 1:
-                id = random.randint(0, questions.get_size_neq_good() - 1)
-                if id not in yesNoGoodID_arr:
-                    yesNoGoodID_arr.append(id)
-                    return response(questions.get_neq_good(id), False)
-        else:
-            while 1:
-                id = random.randint(0, questions.get_size_neq_bad() - 1)
-                if id not in yesNoBadID_arr:
-                    yesNoBadID_arr.append(id)
-                    return response(questions.get_neq_bad(id), False)
 
 
 def getSentiment(text):
