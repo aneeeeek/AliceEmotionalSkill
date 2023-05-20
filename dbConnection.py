@@ -255,3 +255,35 @@ def getLastQuestion(session):
                 return result
     except Error as e:
         print(e)
+
+def getAnswerNumber(session):
+    try:
+        with connect(
+                host="localhost",
+                user="root",
+                password="anek",
+                database="aliceskill",
+        ) as connection:
+            query = "SELECT answerNumber FROM aliceskill.sessions WHERE id_session='"+str(session)+"';"
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                result = cursor.fetchall()
+                return result
+    except Error as e:
+        print(e)
+
+def getResults(session):
+    try:
+        with connect(
+                host="localhost",
+                user="root",
+                password="anek",
+                database="aliceskill",
+        ) as connection:
+            query = "SELECT goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity FROM aliceskill.results WHERE id_result='"+str(int(getResult(session)[0][0]))+"';"
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                result = cursor.fetchall()
+                return result
+    except Error as e:
+        print(e)

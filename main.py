@@ -1,31 +1,25 @@
-import datetime
 import random
 from flask import Flask, request
 import answers
 import dbConnection
-import enum
 
 from dostoevsky.tokenization import RegexTokenizer
 from dostoevsky.models import FastTextSocialNetworkModel
 
-answerNumber = 0
 
 app = Flask(__name__)
 
-goodScore, neutralScore, badScore = 0, 0, 0
-anxiety, frustration, aggressiveness, rigidity = 0,0,0,0
-session = 0
-
 @app.route("/alice", methods=["POST"])
 def main():
-    #todo update session
-    global session
-    global answerNumber
-
     session = request.json.get('session', {}).get('session_id')
+
     if request.json.get('session', {}).get('new'):
         addSession(session)
 
+    answerNumber = int(dbConnection.getAnswerNumber(session)[0][0])
+    results = dbConnection.getResults(session)
+    goodScore, neutralScore, badScore = int(results[0][0]), int(results[0][1]), int(results[0][2])
+    anxiety, frustration, aggressiveness, rigidity = int(results[0][3]), int(results[0][4]), int(results[0][5]), int(results[0][6])
 
     text = request.json.get('request', {}).get('original_utterance').lower()
 
@@ -43,7 +37,7 @@ def main():
         if answerNumber == 0:
             if text == 'давай':
                 answerNumber += 1
-                text = getTextQuestion()
+                text = getTextQuestion(session)
                 updateSession(session, 0, 0, answerNumber)
                 return response(text, False)
             else:
@@ -51,87 +45,88 @@ def main():
 
         # ответ на текстовый вопрос 1, вопрос 2
         elif answerNumber == 1:
-            addScore(text)
+            addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             answerNumber += 1
-            return response(getBinaryQuestion(), False)
+            updateSession(session, 0, 0, answerNumber)
+            return response(getBinaryQuestion(session,goodScore, neutralScore, badScore), False)
 
         # ответ на вопрос да/нет 1, вопрос 3
         elif answerNumber == 2:
-            isAdded = addScore(text)
+            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             if isAdded == 0:
                 return response("Ответьте только словом да или нет", False)
             else:
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
-                return response(getRatingQuestion(), False)
+                return response(getRatingQuestion(answerNumber,session), False)
 
         # ответ на вопрос числом 1, вопрос 4
         elif answerNumber == 3:
-            isAdded = addScore(text)
+            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             if isAdded == 0:
                 return response("Ответьте только числом от 1 до 5", False)
             else:
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
-                return response(getTextQuestion(), False)
+                return response(getTextQuestion(session), False)
 
         # ответ на текстовый вопрос 2, вопрос 5
         elif answerNumber == 4:
-            addScore(text)
+            addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             answerNumber += 1
             updateSession(session, 0, 0, answerNumber)
-            return response(getBinaryQuestion(), False)
+            return response(getBinaryQuestion(session,goodScore, neutralScore, badScore), False)
 
         # ответ на вопрос да/нет 2, вопрос 6
         elif answerNumber == 5:
-            isAdded = addScore(text)
+            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             if isAdded == 0:
                 return response("Ответьте только словом да или нет", False)
             else:
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
-                return response(getRatingQuestion(), False)
+                return response(getRatingQuestion(answerNumber,session), False)
 
         # ответ на вопрос числом 2, вопрос 7
         elif answerNumber == 6:
-            isAdded = addScore(text)
+            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             if isAdded == 0:
                 return response("Ответьте только числом от 1 до 5", False)
             else:
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
-                return response(getTextQuestion(), False)
+                return response(getTextQuestion(session), False)
 
         # ответ на вопрос текстом 3, вопрос 8
         elif answerNumber == 7:
-            addScore(text)
+            addScore(text, session, goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             answerNumber += 1
             updateSession(session, 0, 0, answerNumber)
-            return response(getBinaryQuestion(), False)
+            return response(getBinaryQuestion(session,goodScore, neutralScore, badScore), False)
 
         # ответ на вопрос да/нет 3, вопрос 9
         elif answerNumber == 8:
-            isAdded = addScore(text)
+            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             if isAdded == 0:
                 return response("Ответьте только словом да или нет", False)
             else:
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
-                return response(getRatingQuestion(), False)
+                return response(getRatingQuestion(answerNumber,session), False)
 
         # ответ на вопрос числом 3, вопрос 10
         elif answerNumber == 9:
-            isAdded = addScore(text)
+            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             if isAdded == 0:
                 return response("Ответьте только числом от 1 до 5", False)
             else:
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
-                return response(getRatingQuestion(), False)
+                return response(getRatingQuestion(answerNumber,session), False)
 
         # ответ на вопрос числом 4, результат
         else:
-            isAdded = addScore(text)
+            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
             if isAdded == 0:
                 return response("Ответьте только числом от 1 до 5", False)
             else:
@@ -153,13 +148,13 @@ def main():
 
 
 # === Получить текстовый вопрос, который ранее не задавался пользователю ===
-def getTextQuestion():
+def getTextQuestion(session):
     # Получить индексы всех вопросов текстового типа
     idList = dbConnection.getIDTextQuestions()
-    return returnQuestionText(idList)
+    return returnQuestionText(idList,session)
 
 # === Получить вопрос с ответом ДА/НЕТ, который ранее не задавался пользователю ===
-def getBinaryQuestion():
+def getBinaryQuestion(session, goodScore, neutralScore, badScore):
     result = getMaxScore(goodScore,neutralScore,badScore)
     # Получить индексы всех вопросов в зависимости от результата
     if result == "goodScore":
@@ -172,10 +167,10 @@ def getBinaryQuestion():
         else:
             idList = dbConnection.getIDBinaryBadQuestions()
 
-    return returnQuestionText(idList)
+    return returnQuestionText(idList,session)
 
 # === Получить числовой вопрос, который ранее не задавался пользователю ===
-def getRatingQuestion():
+def getRatingQuestion(answerNumber,session):
     if answerNumber == 3:
         idList = dbConnection.getIDRatingAnxietyQuestions()
     elif answerNumber == 6:
@@ -185,9 +180,9 @@ def getRatingQuestion():
     else:
         idList = dbConnection.getIDRatingRigidityQuestions()
 
-    return returnQuestionText(idList)
+    return returnQuestionText(idList,session)
 
-def returnQuestionText(idList):
+def returnQuestionText(idList,session):
     # Выбрать случайный неповторяющийся индекс вопроса и записать его
     idRandom = random.choice(idList)
     usedIDs = dbConnection.getUsedQuestionIDs(session)
@@ -202,8 +197,7 @@ def returnQuestionText(idList):
     question = textList[0]
     return str(question[0])
 
-def addScore(answer):
-    global goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity
+def addScore(answer,session, goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity):
 
     lastQ = dbConnection.getLastQuestion(session)
     type = dbConnection.getQuestionType(int(lastQ[0][0]))
@@ -297,7 +291,7 @@ def addScore(answer):
             else: return 0
         else: return 0
 
-    updateResult()
+    updateResult(session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
 
 def addSession(session):
     user = request.json.get('session', {}).get('user',{}).get('user_id')
@@ -316,7 +310,7 @@ def addSession(session):
 def updateSession(session,isNew,isFinished,answerNumber):
     dbConnection.updateSession(session,isNew,isFinished,answerNumber)
 
-def updateResult():
+def updateResult(session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity):
     id_result = str(dbConnection.getResult(session)[0][0])
     dbConnection.updateResult(id_result, goodScore, neutralScore, badScore,
                               anxiety, frustration, aggressiveness, rigidity)
