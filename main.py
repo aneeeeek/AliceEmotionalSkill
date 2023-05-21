@@ -6,34 +6,43 @@ import dbConnection
 from dostoevsky.tokenization import RegexTokenizer
 from dostoevsky.models import FastTextSocialNetworkModel
 
-
 app = Flask(__name__)
 
 @app.route("/alice", methods=["POST"])
 def main():
+    # получить id сессии из запроса
     session = request.json.get('session', {}).get('session_id')
 
-    if request.json.get('session', {}).get('new'):
+    # получить статус сессии из запроса
+    isNewSession = request.json.get('session', {}).get('new')
+
+    # если сессия новая - добавить ее в базу данных
+    if isNewSession:
         addSession(session)
 
-    answerNumber = int(dbConnection.getAnswerNumber(session)[0][0])
-    results = dbConnection.getResults(session)
-    goodScore, neutralScore, badScore = int(results[0][0]), int(results[0][1]), int(results[0][2])
-    anxiety, frustration, aggressiveness, rigidity = int(results[0][3]), int(results[0][4]), int(results[0][5]), int(results[0][6])
+    # получить текущее состояние ответов из базы данных
+    answerNumber = getAnswerNumber(session)
+    results = getResultsDict(session)
 
+    # получить текст пользователя из запроса
     text = request.json.get('request', {}).get('original_utterance').lower()
 
+    # пользователь хочет выйти
     if isExitText(text):
         updateSession(session, 0, 1, answerNumber)
         return response("До встречи!", True)
 
-    # диалог с пользователем начался
-    if request.json.get('session', {}).get('new'):
+    # пользователь просит повторить вопрос
+    if isRepeat(text):
+        return response(getLastQuestionText(session), False)
+
+    # диалог с пользователем начался, сказать приветствие
+    if isNewSession:
         return response(answers.getGreeting(random.randint(0, answers.getGreetingsSize() - 1)), False)
 
-    # диалог с пользователем продолжается
+    # диалог с пользователем продолжается, задавать вопросы
     else:
-        # ответ на вопрос о прохождении навыка, вопрос 1
+
         if answerNumber == 0:
             if text == 'давай':
                 answerNumber += 1
@@ -43,109 +52,51 @@ def main():
             else:
                 return response("Ну и пока", True)
 
-        # ответ на текстовый вопрос 1, вопрос 2
-        elif answerNumber == 1:
-            addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
-            answerNumber += 1
-            updateSession(session, 0, 0, answerNumber)
-            return response(getBinaryQuestion(session,goodScore, neutralScore, badScore), False)
-
-        # ответ на вопрос да/нет 1, вопрос 3
-        elif answerNumber == 2:
-            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
+        elif answerNumber >= 1 and answerNumber<=9:
+            isAdded = addScore(text,session,results)
             if isAdded == 0:
-                return response("Ответьте только словом да или нет", False)
+                #todo переделать чтобы в зависимости от вопроса давались подсказки
+                return response("неправильная форма ответа", False)
             else:
+                question = returnQuestion(answerNumber, session, results)
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
-                return response(getRatingQuestion(answerNumber,session), False)
+                return response(question, False)
 
-        # ответ на вопрос числом 1, вопрос 4
-        elif answerNumber == 3:
-            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
-            if isAdded == 0:
-                return response("Ответьте только числом от 1 до 5", False)
-            else:
-                answerNumber += 1
-                updateSession(session, 0, 0, answerNumber)
-                return response(getTextQuestion(session), False)
-
-        # ответ на текстовый вопрос 2, вопрос 5
-        elif answerNumber == 4:
-            addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
-            answerNumber += 1
-            updateSession(session, 0, 0, answerNumber)
-            return response(getBinaryQuestion(session,goodScore, neutralScore, badScore), False)
-
-        # ответ на вопрос да/нет 2, вопрос 6
-        elif answerNumber == 5:
-            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
-            if isAdded == 0:
-                return response("Ответьте только словом да или нет", False)
-            else:
-                answerNumber += 1
-                updateSession(session, 0, 0, answerNumber)
-                return response(getRatingQuestion(answerNumber,session), False)
-
-        # ответ на вопрос числом 2, вопрос 7
-        elif answerNumber == 6:
-            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
-            if isAdded == 0:
-                return response("Ответьте только числом от 1 до 5", False)
-            else:
-                answerNumber += 1
-                updateSession(session, 0, 0, answerNumber)
-                return response(getTextQuestion(session), False)
-
-        # ответ на вопрос текстом 3, вопрос 8
-        elif answerNumber == 7:
-            addScore(text, session, goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
-            answerNumber += 1
-            updateSession(session, 0, 0, answerNumber)
-            return response(getBinaryQuestion(session,goodScore, neutralScore, badScore), False)
-
-        # ответ на вопрос да/нет 3, вопрос 9
-        elif answerNumber == 8:
-            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
-            if isAdded == 0:
-                return response("Ответьте только словом да или нет", False)
-            else:
-                answerNumber += 1
-                updateSession(session, 0, 0, answerNumber)
-                return response(getRatingQuestion(answerNumber,session), False)
-
-        # ответ на вопрос числом 3, вопрос 10
-        elif answerNumber == 9:
-            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
-            if isAdded == 0:
-                return response("Ответьте только числом от 1 до 5", False)
-            else:
-                answerNumber += 1
-                updateSession(session, 0, 0, answerNumber)
-                return response(getRatingQuestion(answerNumber,session), False)
-
-        # ответ на вопрос числом 4, результат
         else:
-            isAdded = addScore(text,session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
+            isAdded = addScore(text,session,results)
             if isAdded == 0:
                 return response("Ответьте только числом от 1 до 5", False)
             else:
                 updateSession(session, 0, 1, answerNumber)
-                result = getMaxScore(goodScore, neutralScore, badScore)
-                allScore = "На основе анализа вашего настроения " #"Вы набрали " + str(goodScore) + " положительных баллов, " + str(neutralScore) + " нейтральных баллов, " + str(badScore) + " негативных баллов, "
+                result = getMaxScore(results)
+
+                allScore = "На основе анализа вашего настроения "
                 if result == "goodScore":
+                    addFinalResult(session, 'positive')
                     return response(
                         allScore + "можно сделать вывод, что Вы чувствуете себя хорошо! Сохраняйте позитивный настрой!",
                         True)  # закончить сессию
                 elif result == "neutralScore":
+                    addFinalResult(session, 'neutral')
                     return response(
                         allScore + "можно сделать вывод, что Вы чувствуете себя не так уж плохо! Все наладится, главное оставаться сильным!",
                         True)  # закончить сессию
                 else:
+                    addFinalResult(session, 'negative')
                     return response(
                         allScore + "можно сделать вывод, что Вы чувствуете себя плохо! Не бойтесь, черные полосы всегда проходят!",
                         True)  # закончить сессию
 
+def addFinalResult(session, result):
+    dbConnection.addFinalResult(session,result)
+def returnQuestion(answerNumber,session,results):
+    if answerNumber==1 or answerNumber== 4 or answerNumber== 7:
+        return getBinaryQuestion(session,results)
+    elif answerNumber==2 or answerNumber==5 or answerNumber==8 or answerNumber==9:
+        return getRatingQuestion(answerNumber,session)
+    elif answerNumber==3 or answerNumber==6:
+        return getTextQuestion(session)
 
 # === Получить текстовый вопрос, который ранее не задавался пользователю ===
 def getTextQuestion(session):
@@ -154,8 +105,8 @@ def getTextQuestion(session):
     return returnQuestionText(idList,session)
 
 # === Получить вопрос с ответом ДА/НЕТ, который ранее не задавался пользователю ===
-def getBinaryQuestion(session, goodScore, neutralScore, badScore):
-    result = getMaxScore(goodScore,neutralScore,badScore)
+def getBinaryQuestion(session, results):
+    result = getMaxScore(results)
     # Получить индексы всех вопросов в зависимости от результата
     if result == "goodScore":
         idList = dbConnection.getIDBinaryGoodQuestions()
@@ -197,101 +148,100 @@ def returnQuestionText(idList,session):
     question = textList[0]
     return str(question[0])
 
-def addScore(answer,session, goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity):
-
+def addScore(answer,session, results):
     lastQ = dbConnection.getLastQuestion(session)
     type = dbConnection.getQuestionType(int(lastQ[0][0]))
     type = int(type[0][0])
     if type == 1:
         result = getSentiment(answer)
         if result == 'positive':
-            goodScore += 1
+            results['goodScore'] += 1
         elif result == 'neutral':
-            neutralScore += 1
+            results['neutralScore'] += 1
         elif result == 'negative':
-            badScore += 1
+            results['badScore'] += 1
         else:
-            neutralScore += 0.5
+            results['neutralScore'] += 0.5
     elif type == 2:
         if answer == "да":
-            goodScore+=1
+            results['goodScore']+=1
         elif answer == "нет":
-            badScore+=1
+            results['badScore']+=1
         else:
             return 0
     elif type == 3:
         if answer == "да":
-            badScore+=1
+            results['badScore']+=1
         elif answer == "нет":
-            goodScore+=1
+            results['goodScore']+=1
         else:
             return 0
     elif type == 4:
         if answer.isnumeric():
             if 5 >= int(answer) >= 1:
-                anxiety+=int(answer)
+                results['anxiety']+=int(answer)
                 if int(answer) == 1:
-                    goodScore += 2
+                    results['goodScore'] += 2
                 elif int(answer) == 2:
-                    goodScore += 1
+                    results['goodScore'] += 1
                 elif int(answer) == 3:
-                    neutralScore+=1
+                    results['neutralScore']+=1
                 elif int(answer) == 4:
-                    badScore += 1
+                    results['badScore'] += 1
                 else:
-                    badScore += 2
+                    results['badScore'] += 2
             else: return 0
         else: return 0
     elif type == 5:
         if answer.isnumeric():
             if 5 >= int(answer) >= 1:
-                frustration+=int(answer)
+                results['frustration']+=int(answer)
                 if int(answer) == 1:
-                    goodScore += 2
+                    results['goodScore'] += 2
                 elif int(answer) == 2:
-                    goodScore += 1
+                    results['goodScore'] += 1
                 elif int(answer) == 3:
-                    neutralScore+=1
+                    results['neutralScore'] += 1
                 elif int(answer) == 4:
-                    badScore += 1
+                    results['badScore'] += 1
                 else:
-                    badScore += 2
+                    results['badScore'] += 2
             else: return 0
         else: return 0
     elif type == 6:
         if answer.isnumeric():
             if 5 >= int(answer) >= 1:
-                aggressiveness+=int(answer)
+                results['aggressiveness']+=int(answer)
                 if int(answer) == 1:
-                    goodScore += 2
+                    results['goodScore'] += 2
                 elif int(answer) == 2:
-                    goodScore += 1
+                    results['goodScore'] += 1
                 elif int(answer) == 3:
-                    neutralScore+=1
+                    results['neutralScore'] += 1
                 elif int(answer) == 4:
-                    badScore += 1
+                    results['badScore'] += 1
                 else:
-                    badScore += 2
+                    results['badScore'] += 2
             else: return 0
         else: return 0
     else:
         if answer.isnumeric():
             if 5 >= int(answer) >= 1:
-                rigidity+=int(answer)
+                results['rigidity']+=int(answer)
                 if int(answer) == 1:
-                    goodScore += 2
+                    results['goodScore'] += 2
                 elif int(answer) == 2:
-                    goodScore += 1
+                    results['goodScore'] += 1
                 elif int(answer) == 3:
-                    neutralScore+=1
+                    results['neutralScore'] += 1
                 elif int(answer) == 4:
-                    badScore += 1
+                    results['badScore'] += 1
                 else:
-                    badScore += 2
+                    results['badScore'] += 2
             else: return 0
         else: return 0
 
-    updateResult(session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity)
+    updateResult(session,results)
 
 def addSession(session):
     user = request.json.get('session', {}).get('user',{}).get('user_id')
@@ -306,14 +256,13 @@ def addSession(session):
     id_res = str(dbConnection.getLastResult()[0][0])
     dbConnection.addSession(session, 1, date, user, id_res,0,0,0)
 
-
 def updateSession(session,isNew,isFinished,answerNumber):
     dbConnection.updateSession(session,isNew,isFinished,answerNumber)
 
-def updateResult(session,goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity):
+def updateResult(session,results):
     id_result = str(dbConnection.getResult(session)[0][0])
-    dbConnection.updateResult(id_result, goodScore, neutralScore, badScore,
-                              anxiety, frustration, aggressiveness, rigidity)
+    dbConnection.updateResult(id_result, results['goodScore'], results['neutralScore'], results['badScore'],
+                              results['anxiety'], results['frustration'], results['aggressiveness'], results['rigidity'])
 
 def response(text, end_session):
     return {
@@ -325,36 +274,55 @@ def response(text, end_session):
         'version': '1.0'
     }
 
-
 def isExitText(text):
     return text == 'выход'
 
+def isRepeat(text):
+    return text == 'повтори'
 
-def getMaxScore(goodScore, neutralScore, badScore):
-    maxScore = max(goodScore, neutralScore, badScore)
-    if maxScore == goodScore == neutralScore == badScore:
+def getMaxScore(results):
+    maxScore = max(results['goodScore'], results['neutralScore'], results['badScore'])
+    if maxScore == results['goodScore'] == results['neutralScore'] == results['badScore']:
         return "neutralScore"
-    elif maxScore == goodScore:
-        if maxScore == neutralScore:
+    elif maxScore == results['goodScore']:
+        if maxScore == results['neutralScore']:
             return "goodScore"
-        elif maxScore == badScore:
+        elif maxScore == results['badScore']:
             return "neutralScore"
         else:
             return "goodScore"
-    elif maxScore == neutralScore:
-        if maxScore == badScore:
+    elif maxScore == results['neutralScore']:
+        if maxScore == results['badScore']:
             return "badScore"
         else:
             return "neutralScore"
-    elif maxScore == badScore:
+    elif maxScore == results['badScore']:
         return "badScore"
-
 
 def getSentiment(text):
     tokenizer = RegexTokenizer()
     model = FastTextSocialNetworkModel(tokenizer=tokenizer)
     result = model.predict([text.lower()], k=1)
     return list(result[0].keys()).pop(0)
+
+def getAnswerNumber(session):
+    return int(dbConnection.getAnswerNumber(session)[0][0])
+
+def getResultsDict(session):
+    results = dbConnection.getResults(session)
+    resultsDict = dict()
+    resultsDict['goodScore'] = int(results[0][0])
+    resultsDict['neutralScore'] = int(results[0][1])
+    resultsDict['badScore'] = int(results[0][2])
+    resultsDict['anxiety'] = int(results[0][3])
+    resultsDict['frustration'] = int(results[0][4])
+    resultsDict['aggressiveness'] = int(results[0][5])
+    resultsDict['rigidity'] = int(results[0][6])
+    return resultsDict
+
+def getLastQuestionText(session):
+    id_q=int(dbConnection.getLastQuestion(session)[0][0])
+    return str(dbConnection.getQuestion(id_q)[0][0])
 
 
 app.run('0.0.0.0', port=5000, debug=True)

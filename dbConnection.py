@@ -287,3 +287,19 @@ def getResults(session):
                 return result
     except Error as e:
         print(e)
+
+def addFinalResult(session, finalResult):
+    try:
+        with connect(
+                host="localhost",
+                user="root",
+                password="anek",
+                database="aliceskill",
+        ) as connection:
+            query = "UPDATE aliceskill.sessions SET finalResult='"+str(finalResult)+\
+                    "' WHERE id_session='"+str(session)+"';"
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                connection.commit()
+    except Error as e:
+        print(e)
