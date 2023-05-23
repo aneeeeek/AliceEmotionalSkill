@@ -16,7 +16,6 @@ app = Flask(__name__)
 def main():
     # получить id сессии из запроса
     session = request.json.get('session', {}).get('session_id')
-
     # получить статус сессии из запроса
     isNewSession = request.json.get('session', {}).get('new')
 
@@ -41,7 +40,28 @@ def main():
     if synonyms.isRepeatQuestion(textWithoutPunctuation):
         return response(getLastQuestionText(session), False)
 
-    # диалог с пользователем начался, сказать приветствие
+    # пользователь просит помощь
+    if synonyms.isHelp(textWithoutPunctuation):
+        return response("Пока никак не могу вам помочь", False)
+
+    # пользователь спрашивает что умеет навык
+    if synonyms.isWhatCanDo(textWithoutPunctuation):
+        return response("Я распознаю ваше настроение", False)
+
+    # пользователь просит запустить навык заново
+    if synonyms.isRepeatSkill(textWithoutPunctuation):
+        updateSession(session, 0, 0, 0)
+        results['goodScore'] = 0
+        results['neutralScore'] = 0
+        results['badScore'] = 0
+        results['anxiety'] = 0
+        results['frustration'] = 0
+        results['aggressiveness'] = 0
+        results['rigidity'] = 0
+        updateResult(session, results)
+        return response(answers.getGreeting(random.randint(0, answers.getGreetingsSize() - 1)), False)
+
+    # ----------------------- диалог с пользователем начался, сказать приветствие -------------------------------------
     if isNewSession:
         return response(answers.getGreeting(random.randint(0, answers.getGreetingsSize() - 1)), False)
 
@@ -59,7 +79,7 @@ def main():
             else:
                 return response("Я не поняла ваш ответ, повторите, пожалуйста", False)
 
-        elif answerNumber >= 1 and answerNumber <= 9:
+        elif 1 <= answerNumber <= 9:
             isAdded = addScore(text, session, results)
             if isAdded == 0:
                 # todo переделать чтобы в зависимости от вопроса давались подсказки
@@ -344,5 +364,6 @@ def returnQuestionText(idList, session):
     textList = dbConnection.getQuestion(int(idRandom[0]))
     question = textList[0]
     return str(question[0])
+
 
 app.run('0.0.0.0', port=5000, debug=True)
