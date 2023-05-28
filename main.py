@@ -2,7 +2,6 @@ import random
 import re
 
 from flask import Flask, request
-import answers
 import dbConnection
 import synonyms
 
@@ -34,7 +33,7 @@ def main():
     # пользователь хочет выйти
     if synonyms.isExitText(textWithoutPunctuation):
         updateSession(session, 0, 1, answerNumber)
-        return response("До встречи!", True)
+        return response(getGoodbye(), True)
 
     # пользователь просит повторить вопрос
     if synonyms.isRepeatQuestion(textWithoutPunctuation):
@@ -42,11 +41,11 @@ def main():
 
     # пользователь просит помощь
     if synonyms.isHelp(textWithoutPunctuation):
-        return response("Пока никак не могу вам помочь", False)
+        return response(getHelp(), False)
 
     # пользователь спрашивает что умеет навык
     if synonyms.isWhatCanDo(textWithoutPunctuation):
-        return response("Я распознаю ваше настроение", False)
+        return response(getWhatCanYouDo(), False)
 
     # пользователь просит запустить навык заново
     if synonyms.isRepeatSkill(textWithoutPunctuation):
@@ -59,11 +58,12 @@ def main():
         results['aggressiveness'] = 0
         results['rigidity'] = 0
         updateResult(session, results)
-        return response(answers.getGreeting(random.randint(0, answers.getGreetingsSize() - 1)), False)
+        return response(getGreeting(), False)
 
     # ----------------------- диалог с пользователем начался, сказать приветствие -------------------------------------
     if isNewSession:
-        return response(answers.getGreeting(random.randint(0, answers.getGreetingsSize() - 1)), False)
+        # todo кнопка помощь, выход
+        return response(getGreeting(), False)
 
     # диалог с пользователем продолжается, задавать вопросы
     else:
@@ -73,9 +73,10 @@ def main():
                 answerNumber += 1
                 text = getTextQuestion(session)
                 updateSession(session, 0, 0, answerNumber)
+                # todo кнопка повторить вопрос
                 return response(text, False)
             elif isAgree == 0:
-                return response("Ну и пока", True)
+                return response(getGoodbye(), True)
             else:
                 return response("Я не поняла ваш ответ, повторите, пожалуйста", False)
 
@@ -88,6 +89,7 @@ def main():
                 question = returnQuestion(answerNumber, session, results)
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
+                # todo кнопки повторить вопрос;да/нет; 12345
                 return response(question, False)
 
         else:
@@ -96,24 +98,8 @@ def main():
                 return response("Ответьте только числом от 1 до 5", False)
             else:
                 updateSession(session, 0, 1, answerNumber)
-                result = getMaxScore(results)
-
-                allScore = "На основе анализа вашего настроения "
-                if result == "goodScore":
-                    addFinalResult(session, 'positive')
-                    return response(
-                        allScore + "можно сделать вывод, что Вы чувствуете себя хорошо! Сохраняйте позитивный настрой!",
-                        True)  # закончить сессию
-                elif result == "neutralScore":
-                    addFinalResult(session, 'neutral')
-                    return response(
-                        allScore + "можно сделать вывод, что Вы чувствуете себя не так уж плохо! Все наладится, главное оставаться сильным!",
-                        True)  # закончить сессию
-                else:
-                    addFinalResult(session, 'negative')
-                    return response(
-                        allScore + "можно сделать вывод, что Вы чувствуете себя плохо! Не бойтесь, черные полосы всегда проходят!",
-                        True)  # закончить сессию
+                # todo добавить кнопки статистика и выход
+                return response(getResultText(results), False)
 
 
 def response(text, end_session):
@@ -121,7 +107,13 @@ def response(text, end_session):
         'response':
             {
                 'text': text,
-                'end_session': end_session
+                'end_session': end_session,
+                'buttons': [
+                    {
+                        "title": "Выход",
+                        "hide": True
+                    }
+                ]
             },
         'version': '1.0'
     }
@@ -155,6 +147,54 @@ def getSentiment(text):
 
 
 # ======================= Работа с базой данных ===========================
+def getResultText(results):
+    result = getMaxScore(results)
+
+    resultText = getConclusion()
+
+    if result == "goodScore":
+        resultText += getGoodResult()
+    elif result == "neutralScore":
+        resultText += getNeutralResult()
+    else:
+        resultText += getNegativeResult()
+
+    if results['anxiety'] == 4 or results['anxiety'] == 5:
+        resultText += getAnxiety(0)  # начало текста
+        if results['frustration'] == 4 or results['frustration'] == 5:
+            resultText += getFrustration(1)
+        if results['aggressiveness'] == 4 or results['aggressiveness'] == 5:
+            resultText += getAggressiveness(1)
+        if results['rigidity'] == 4 or results['rigidity'] == 5:
+            resultText += getRigidity(1)
+
+    elif results['frustration'] == 4 or results['frustration'] == 5:
+        resultText += getFrustration(0)  # начало текста
+        if results['aggressiveness'] == 4 or results['aggressiveness'] == 5:
+            resultText += getAggressiveness(1)
+        if results['rigidity'] == 4 or results['rigidity'] == 5:
+            resultText += getRigidity(1)
+
+    elif results['aggressiveness'] == 4 or results['aggressiveness'] == 5:
+        resultText += getAggressiveness(0)  # начало текста
+        if results['rigidity'] == 4 or results['rigidity'] == 5:
+            resultText += getRigidity(1)
+
+    elif results['rigidity'] == 4 or results['rigidity'] == 5:
+        resultText += getRigidity(0)  # начало текста
+
+    elif (results['anxiety'] == 1 or results['anxiety'] == 2) and (results['frustration'] == 1 or results['frustration'] == 2) and (results['aggressiveness'] == 1 or results['aggressiveness'] == 2) and (results['rigidity'] == 1 or results['rigidity'] == 2):
+        resultText += getAnxiety(1)+getFrustration(1)+getAggressiveness(1)+getRigidity(1)
+
+    resultText += ". "
+
+    resultText += getMethodic()
+
+    resultText += getEnd()
+
+    return resultText
+
+
 def addScore(answer, session, results):
     lastQ = dbConnection.getLastQuestion(session)
     type = int(dbConnection.getQuestionType(int(lastQ[0][0]))[0][0])
@@ -271,7 +311,10 @@ def getResultsDict(session):
 
 def getLastQuestionText(session):
     id_q = int(dbConnection.getLastQuestion(session)[0][0])
-    return str(dbConnection.getQuestion(id_q)[0][0])
+    if id_q:
+        return str(dbConnection.getQuestion(id_q)[0][0])
+    else:
+        return "Вы готовы начать проходить опрос для определения вашего настроения?"
 
 
 def addSession(session):
@@ -310,6 +353,91 @@ def returnQuestion(answerNumber, session, results):
         return getRatingQuestion(answerNumber, session)
     elif answerNumber == 3 or answerNumber == 6:
         return getTextQuestion(session)
+
+
+def getGreeting():
+    idList = dbConnection.getGreetings()
+    return returnAnswerText(idList)
+
+
+def getGoodbye():
+    idList = dbConnection.getGoodbye()
+    return returnAnswerText(idList)
+
+
+def getConclusion():
+    idList = dbConnection.getConclusion()
+    return returnAnswerText(idList)
+
+
+def getGoodResult():
+    idList = dbConnection.getGoodResult()
+    return returnAnswerText(idList)
+
+
+def getNeutralResult():
+    idList = dbConnection.getNeutralResult()
+    return returnAnswerText(idList)
+
+
+def getNegativeResult():
+    idList = dbConnection.getNegativeResult()
+    return returnAnswerText(idList)
+
+def getAnxiety(arrayId):
+    # Получить текст вопроса по индексу
+    textList = dbConnection.getAnswer(dbConnection.getAnswerByType(8)[arrayId][0])
+    ans = textList[0]
+    return str(ans[0])
+
+def getFrustration(arrayId):
+    # Получить текст вопроса по индексу
+    textList = dbConnection.getAnswer(dbConnection.getAnswerByType(9)[arrayId][0])
+    ans = textList[0]
+    return str(ans[0])
+
+def getAggressiveness(arrayId):
+    # Получить текст вопроса по индексу
+    textList = dbConnection.getAnswer(dbConnection.getAnswerByType(10)[arrayId][0])
+    ans = textList[0]
+    return str(ans[0])
+
+def getRigidity(arrayId):
+    # Получить текст вопроса по индексу
+    textList = dbConnection.getAnswer(dbConnection.getAnswerByType(11)[arrayId][0])
+    ans = textList[0]
+    return str(ans[0])
+
+def getMethodic():
+    idList = dbConnection.getMethodic()
+    return returnAnswerText(idList)
+
+def getEnd():
+    idList = dbConnection.getEnd()
+    return returnAnswerText(idList)
+
+def getHelp():
+    # Получить текст вопроса по индексу
+    textList = dbConnection.getAnswer(dbConnection.getAnswerByType(12)[0][0])
+    ans = textList[0]
+    return str(ans[0])
+
+
+def getWhatCanYouDo():
+    # Получить текст вопроса по индексу
+    textList = dbConnection.getAnswer(dbConnection.getAnswerByType(13)[0][0])
+    ans = textList[0]
+    return str(ans[0])
+
+
+def returnAnswerText(idList):
+    # Выбрать случайный неповторяющийся индекс вопроса и записать его
+    idRandom = random.choice(idList)
+
+    # Получить текст вопроса по индексу
+    textList = dbConnection.getAnswer(int(idRandom[0]))
+    ans = textList[0]
+    return str(ans[0])
 
 
 # === Получить текстовый вопрос, который ранее не задавался пользователю ===
