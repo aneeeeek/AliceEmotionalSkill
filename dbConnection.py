@@ -398,3 +398,20 @@ def getAnswer(id):
                 return result
     except Error as e:
         print(e)
+
+
+def getStatistic(id_user):
+    try:
+        with connect(
+                host="localhost",
+                user="root",
+                password="anek",
+                database="aliceskill",
+        ) as connection:
+            query = "SELECT dateTime, finalResult FROM aliceskill.sessions WHERE isFinished=1 AND finalResult IS NOT NULL AND id_user='" + str(id_user) + "'ORDER BY id_result;"
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                result = cursor.fetchall()
+                return result
+    except Error as e:
+        print(e)

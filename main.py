@@ -1,6 +1,10 @@
+import datetime
+import json
+import os
 import random
 import re
-
+import YandexImages
+import numpy as np
 from flask import Flask, request
 import dbConnection
 import synonyms
@@ -10,6 +14,8 @@ from dostoevsky.models import FastTextSocialNetworkModel
 
 app = Flask(__name__)
 
+IMAGE_TOKEN = 'y0_AgAAAAA5tHjAAAT7owAAAADkO7ycqW0gtWLZR46gTf6ETw6fBP3UdvA'
+imageIDArray = []
 
 @app.route("/alice", methods=["POST"])
 def main():
@@ -26,9 +32,43 @@ def main():
     answerNumber = getAnswerNumber(session)
     results = getResultsDict(session)
 
+    # удалять картинку в яндексе и в папке
+    deletePicture(request.json.get('session', {}).get('user', {}).get('user_id'))
+
     # получить текст пользователя из запроса
     text = request.json.get('request', {}).get('original_utterance').lower()
     textWithoutPunctuation = re.sub(r'[^\w\s]', '', text)
+
+    # пользователь запрашивает статистику
+    if synonyms.isStatistic(textWithoutPunctuation):
+        #if answerNumber == 11:
+            import matplotlib.pyplot as plt
+            id_user = request.json.get('session', {}).get('user', {}).get('user_id')
+            import matplotlib.dates as mdates
+            dt, r = getStatistic(id_user)
+            fig = plt.figure(figsize=(7.76, 3.44))
+            ax = fig.add_subplot()
+            #x = [datetime.datetime.strptime(d, '%Y-%m-%d %H:%M:%S.%f').date() for d in dt]
+            #plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S.%f'))
+            #plt.gca().xaxis.set_major_locator(mdates.MinuteLocator())
+            plt.plot(dt, r)
+            #plt.gcf().autofmt_xdate()
+
+            ax.set_yticks([2, 4, 6], labels=['Плохо', 'Нейтрально', 'Хорошо'])
+
+            ax.set(xlabel='Дата прохождения навыка')
+            ax.grid()
+
+            plt.savefig(str(id_user)+".png")
+
+            id_image=downloadImage(id_user)['id']
+            imageIDArray.append(id_image)
+
+            #todo словесное описание
+            return responseWithPicture('ВВВВВВВ',id_image)
+        #else:
+            # todo кнопка повторить вопрос
+            #return response("Пройдите опрос до конца, чтобы я показала изменения вашего настроения", False)
 
     # пользователь хочет выйти
     if synonyms.isExitText(textWithoutPunctuation):
@@ -36,19 +76,22 @@ def main():
         return response(getGoodbye(), True)
 
     # пользователь просит повторить вопрос
-    if synonyms.isRepeatQuestion(textWithoutPunctuation):
+    if synonyms.isRepeatQuestion(textWithoutPunctuation) and answerNumber < 10:
+        # todo переписать чтобы возвращался сразу нужный респонс?
         return response(getLastQuestionText(session), False)
 
     # пользователь просит помощь
-    if synonyms.isHelp(textWithoutPunctuation):
+    if synonyms.isHelp(textWithoutPunctuation) and answerNumber < 10:
+        # todo кнопка повторить вопрос
         return response(getHelp(), False)
 
     # пользователь спрашивает что умеет навык
-    if synonyms.isWhatCanDo(textWithoutPunctuation):
+    if synonyms.isWhatCanDo(textWithoutPunctuation) and answerNumber < 10:
+        # todo кнопка повторить вопрос
         return response(getWhatCanYouDo(), False)
 
     # пользователь просит запустить навык заново
-    if synonyms.isRepeatSkill(textWithoutPunctuation):
+    if synonyms.isRepeatSkill(textWithoutPunctuation) and answerNumber < 10:
         updateSession(session, 0, 0, 0)
         results['goodScore'] = 0
         results['neutralScore'] = 0
@@ -58,12 +101,11 @@ def main():
         results['aggressiveness'] = 0
         results['rigidity'] = 0
         updateResult(session, results)
-        return response(getGreeting(), False)
+        return responseHelpExit(getGreeting())
 
     # ----------------------- диалог с пользователем начался, сказать приветствие -------------------------------------
     if isNewSession:
-        # todo кнопка помощь, выход
-        return response(getGreeting(), False)
+        return responseHelpExit(getGreeting())
 
     # диалог с пользователем продолжается, задавать вопросы
     else:
@@ -73,42 +115,91 @@ def main():
                 answerNumber += 1
                 text = getTextQuestion(session)
                 updateSession(session, 0, 0, answerNumber)
-                # todo кнопка повторить вопрос
-                return response(text, False)
+                return responseRepeatQuestion(text)
             elif isAgree == 0:
                 return response(getGoodbye(), True)
             else:
-                return response("Я не поняла ваш ответ, повторите, пожалуйста", False)
+                return responseHelpExit("Я не поняла ваш ответ, повторите, пожалуйста")
 
         elif 1 <= answerNumber <= 9:
             isAdded = addScore(text, session, results)
             if isAdded == 0:
                 # todo переделать чтобы в зависимости от вопроса давались подсказки
-                return response("неправильная форма ответа", False)
+                return response("Неправильная форма ответа", False)
             else:
                 question = returnQuestion(answerNumber, session, results)
+                resp = returnResponse(answerNumber, question)
                 answerNumber += 1
                 updateSession(session, 0, 0, answerNumber)
-                # todo кнопки повторить вопрос;да/нет; 12345
-                return response(question, False)
+                return resp
 
         else:
-            isAdded = addScore(text, session, results)
-            if isAdded == 0:
-                return response("Ответьте только числом от 1 до 5", False)
-            else:
-                updateSession(session, 0, 1, answerNumber)
-                # todo добавить кнопки статистика и выход
-                return response(getResultText(results), False)
+            if answerNumber == 10:
+                isAdded = addScore(text, session, results)
+                if isAdded == 0:
 
+                    # todo переделать чтобы в зависимости от вопроса давались подсказки
+                    return response("Ответьте только числом от 1 до 5", False)
+                else:
+                    answerNumber+=1
+                    updateSession(session, 0, 1, answerNumber)
+                    return responseStatisticExit(getResultText(results,session))
+            else:
+                return responseStatisticExit("Вы можете посмотреть статистику или выйти из навыка. Скажите \"Посмотреть статистику\" для просмотра изменения вашего настроения или \"Выход\", чтобы закончить")
+
+def downloadImage(id_user):
+    token = IMAGE_TOKEN
+    skillsId = '848af041-febd-4cf6-9afc-2460a22eaa64'
+    yImages = YandexImages.YandexImages()
+    yImages.set_auth_token(IMAGE_TOKEN)
+    result = yImages.downloadImageFile(str(id_user)+'.png')
+    return result
+
+def deletePicture(id_user):
+    path = str(id_user)+".png"
+    if os.path.isfile(path):
+        os.remove(path)
+    for image in imageIDArray:
+        yImages = YandexImages.YandexImages()
+        yImages.set_auth_token(IMAGE_TOKEN)
+        yImages.deleteImage(image)
 
 def response(text, end_session):
     return {
         'response':
             {
                 'text': text,
-                'end_session': end_session,
+                'end_session': end_session
+            },
+        'version': '1.0'
+    }
+
+def responseWithPicture(text, imageId):
+    return {
+        'response':
+            {
+                'text': text,
+                'end_session': False,
+                'card': {
+                    'type': 'BigImage',
+                    'image_id': imageId,
+                    'title': 'График изменения вашего настроения'
+                }
+            },
+        'version': '1.0'
+    }
+
+def responseHelpExit(text):
+    return {
+        'response':
+            {
+                'text': text,
+                'end_session': False,
                 'buttons': [
+                    {
+                        "title": "Помощь",
+                        "hide": True
+                    },
                     {
                         "title": "Выход",
                         "hide": True
@@ -117,7 +208,107 @@ def response(text, end_session):
             },
         'version': '1.0'
     }
+def responseRepeatQuestion(text):
+    return {
+        'response':
+            {
+                'text': text,
+                'end_session': False,
+                'buttons': [
+                    {
+                        "title": "Повторить вопрос",
+                        "hide": True
+                    }
+                ]
+            },
+        'version': '1.0'
+    }
 
+def responseStatisticExit(text):
+    return {
+        'response':
+            {
+                'text': text,
+                'end_session': False,
+                'buttons': [
+                    {
+                        "title": "Статистика",
+                        "hide": True
+                    },
+                    {
+                        "title": "Выход",
+                        "hide": True
+                    }
+                ]
+            },
+        'version': '1.0'
+    }
+def returnResponse(answerNumber, text):
+    if answerNumber == 1 or answerNumber == 4 or answerNumber == 7:
+        return {
+        'response':
+            {
+                'text': text,
+                'end_session': False,
+                'buttons': [
+                    {
+                        "title": "Да",
+                        "hide": True
+                    },
+                    {
+                        "title": "Нет",
+                        "hide": True
+                    }
+                ]
+            },
+        'version': '1.0'
+    }
+    elif answerNumber == 2 or answerNumber == 5 or answerNumber == 8 or answerNumber == 9:
+        return {
+            'response':
+                {
+                    'text': text,
+                    'end_session': False,
+                    'buttons': [
+                        {
+                            "title": "1",
+                            "hide": True
+                        },
+                        {
+                            "title": "2",
+                            "hide": True
+                        },
+                        {
+                            "title": "3",
+                            "hide": True
+                        },
+                        {
+                            "title": "4",
+                            "hide": True
+                        },
+                        {
+                            "title": "5",
+                            "hide": True
+                        }
+                    ]
+                },
+            'version': '1.0'
+        }
+    elif answerNumber == 3 or answerNumber == 6:
+        return {
+            'response':
+                {
+                    'text': text,
+                    'end_session': False,
+                    'buttons': [
+                        {
+                            "title": "Повторить вопрос",
+                            "hide": True
+                        }
+                    ]
+                },
+            'version': '1.0'
+        }
 
 def getMaxScore(results):
     maxScore = max(results['goodScore'], results['neutralScore'], results['badScore'])
@@ -147,17 +338,20 @@ def getSentiment(text):
 
 
 # ======================= Работа с базой данных ===========================
-def getResultText(results):
+def getResultText(results,session):
     result = getMaxScore(results)
 
     resultText = getConclusion()
 
     if result == "goodScore":
         resultText += getGoodResult()
+        addFinalResult(session, 'positive')
     elif result == "neutralScore":
         resultText += getNeutralResult()
+        addFinalResult(session, 'neutral')
     else:
         resultText += getNegativeResult()
+        addFinalResult(session, 'negative')
 
     if results['anxiety'] == 4 or results['anxiety'] == 5:
         resultText += getAnxiety(0)  # начало текста
@@ -199,15 +393,16 @@ def addScore(answer, session, results):
     lastQ = dbConnection.getLastQuestion(session)
     type = int(dbConnection.getQuestionType(int(lastQ[0][0]))[0][0])
     if type == 1:
+        #todo мб поменять логику начисления очков
         result = getSentiment(answer)
         if result == 'positive':
-            results['goodScore'] += 1
+            results['goodScore'] += 2
         elif result == 'neutral':
-            results['neutralScore'] += 1
+            results['neutralScore'] += 2
         elif result == 'negative':
-            results['badScore'] += 1
+            results['badScore'] += 2
         else:
-            results['neutralScore'] += 0.5
+            results['neutralScore'] += 1
     elif type == 2:
         result = synonyms.isYesOrNo(answer)
         if result == 1:
@@ -290,6 +485,37 @@ def addScore(answer, session, results):
             return 0
 
     updateResult(session, results)
+
+
+def getStatistic(id_user):
+    array = dbConnection.getStatistic(id_user)
+    datetime, res = [], []
+    length = len(array)
+    if length<=5:
+        for element in array:
+            d = element[0]
+            datetime.append(d[5:16])
+            if str(element[1])=='positive':
+                res.append(6)
+            elif str(element[1])=='neutral':
+                res.append(4)
+            else:
+                res.append(2)
+    else:
+        i=5
+        while i>0:
+            datetime.append(array[length - i][0][5:16])
+            if str(array[length - i][1]) == 'positive':
+                res.append(6)
+            elif str(array[length - i][1]) == 'neutral':
+                res.append(4)
+            elif str(array[length - i][1]) == 'negative':
+                res.append(2)
+            i-=1
+
+
+    print(datetime,res)
+    return datetime, np.asarray(res),
 
 
 def getAnswerNumber(session):
