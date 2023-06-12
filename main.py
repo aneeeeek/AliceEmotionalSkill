@@ -1,28 +1,28 @@
-import datetime
-import json
 import os
 import random
 import re
-import YandexImages
 import numpy as np
 from flask import Flask, request
+
 import dbConnection
 import synonyms
+import YandexImages
 
 from dostoevsky.tokenization import RegexTokenizer
 from dostoevsky.models import FastTextSocialNetworkModel
 
 app = Flask(__name__)
 
-IMAGE_TOKEN = 'y0_AgAAAAA5tHjAAAT7owAAAADkO7ycqW0gtWLZR46gTf6ETw6fBP3UdvA'
-imageIDArray = []
 
+imageIDs = []       # массив идентификаторов всех картинок внутри Яндекс.Диалоги,
+                        # который очищается при вызове функции
+
+
+# главная функция, которая вызывается при получении на локальный адрес пост-запроса
 @app.route("/alice", methods=["POST"])
 def main():
-    # получить id сессии из запроса
-    session = request.json.get('session', {}).get('session_id')
-    # получить статус сессии из запроса
-    isNewSession = request.json.get('session', {}).get('new')
+    session = request.json.get('session', {}).get('session_id')     # получить id сессии из запроса
+    isNewSession = request.json.get('session', {}).get('new')       # получить статус сессии из запроса
 
     # если сессия новая - добавить ее в базу данных
     if isNewSession:
@@ -32,7 +32,7 @@ def main():
     answerNumber = getAnswerNumber(session)
     results = getResultsDict(session)
 
-    # удалять картинку в яндексе и в папке
+    # удалить картинку в яндексе и в папке
     deletePicture(request.json.get('session', {}).get('user', {}).get('user_id'))
 
     # получить текст пользователя из запроса
@@ -41,34 +41,16 @@ def main():
 
     # пользователь запрашивает статистику
     if synonyms.isStatistic(textWithoutPunctuation):
-        #if answerNumber == 11:
-            import matplotlib.pyplot as plt
+        if answerNumber == 11:
             id_user = request.json.get('session', {}).get('user', {}).get('user_id')
-            import matplotlib.dates as mdates
-            dt, r = getStatistic(id_user)
-            fig = plt.figure(figsize=(7.76, 3.44))
-            ax = fig.add_subplot()
-            #x = [datetime.datetime.strptime(d, '%Y-%m-%d %H:%M:%S.%f').date() for d in dt]
-            #plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S.%f'))
-            #plt.gca().xaxis.set_major_locator(mdates.MinuteLocator())
-            plt.plot(dt, r)
-            #plt.gcf().autofmt_xdate()
+            drawStatistic(id_user)
 
-            ax.set_yticks([2, 4, 6], labels=['Плохо', 'Нейтрально', 'Хорошо'])
+            id_image = downloadImage(id_user)['id']
+            imageIDs.append(id_image)
 
-            ax.set(xlabel='Дата прохождения навыка')
-            ax.grid()
-
-            plt.savefig(str(id_user)+".png")
-
-            id_image=downloadImage(id_user)['id']
-            imageIDArray.append(id_image)
-
-            #todo словесное описание
-            return responseWithPicture('ВВВВВВВ',id_image)
-        #else:
-            # todo кнопка повторить вопрос
-            #return response("Пройдите опрос до конца, чтобы я показала изменения вашего настроения", False)
+            return responseWithPicture('Вот график изменения вашего настроения',id_image)
+        else:
+            return response("Пройдите опрос до конца, чтобы я показала изменения вашего настроения", False)
 
     # пользователь хочет выйти
     if synonyms.isExitText(textWithoutPunctuation):
@@ -77,17 +59,14 @@ def main():
 
     # пользователь просит повторить вопрос
     if synonyms.isRepeatQuestion(textWithoutPunctuation) and answerNumber < 10:
-        # todo переписать чтобы возвращался сразу нужный респонс?
         return response(getLastQuestionText(session), False)
 
     # пользователь просит помощь
     if synonyms.isHelp(textWithoutPunctuation) and answerNumber < 10:
-        # todo кнопка повторить вопрос
         return response(getHelp(), False)
 
     # пользователь спрашивает что умеет навык
     if synonyms.isWhatCanDo(textWithoutPunctuation) and answerNumber < 10:
-        # todo кнопка повторить вопрос
         return response(getWhatCanYouDo(), False)
 
     # пользователь просит запустить навык заново
@@ -124,7 +103,6 @@ def main():
         elif 1 <= answerNumber <= 9:
             isAdded = addScore(text, session, results)
             if isAdded == 0:
-                # todo переделать чтобы в зависимости от вопроса давались подсказки
                 return response("Неправильная форма ответа", False)
             else:
                 question = returnQuestion(answerNumber, session, results)
@@ -137,8 +115,6 @@ def main():
             if answerNumber == 10:
                 isAdded = addScore(text, session, results)
                 if isAdded == 0:
-
-                    # todo переделать чтобы в зависимости от вопроса давались подсказки
                     return response("Ответьте только числом от 1 до 5", False)
                 else:
                     answerNumber+=1
@@ -147,11 +123,23 @@ def main():
             else:
                 return responseStatisticExit("Вы можете посмотреть статистику или выйти из навыка. Скажите \"Посмотреть статистику\" для просмотра изменения вашего настроения или \"Выход\", чтобы закончить")
 
+def drawStatistic(id_user):
+    import matplotlib.pyplot as plt
+    dt, r = getStatistic(id_user)
+    fig = plt.figure(figsize=(7.76, 3.44))
+    ax = fig.add_subplot()
+    plt.plot(dt, r)
+    ax.set_yticks([2, 4, 6], labels=['Плохо', 'Нейтрально', 'Хорошо'])
+    ax.set(xlabel='Дата прохождения навыка')
+    ax.grid()
+
+    plt.savefig(str(id_user) + ".png")
+
 def downloadImage(id_user):
-    token = IMAGE_TOKEN
+    token = 'y0_AgAAAAA5tHjAAAT7owAAAADkO7ycqW0gtWLZR46gTf6ETw6fBP3UdvA'
     skillsId = '848af041-febd-4cf6-9afc-2460a22eaa64'
     yImages = YandexImages.YandexImages()
-    yImages.set_auth_token(IMAGE_TOKEN)
+    yImages.set_auth_token(token)
     result = yImages.downloadImageFile(str(id_user)+'.png')
     return result
 
@@ -159,9 +147,9 @@ def deletePicture(id_user):
     path = str(id_user)+".png"
     if os.path.isfile(path):
         os.remove(path)
-    for image in imageIDArray:
+    for image in imageIDs:
         yImages = YandexImages.YandexImages()
-        yImages.set_auth_token(IMAGE_TOKEN)
+        yImages.set_auth_token('y0_AgAAAAA5tHjAAAT7owAAAADkO7ycqW0gtWLZR46gTf6ETw6fBP3UdvA')
         yImages.deleteImage(image)
 
 def response(text, end_session):
@@ -332,6 +320,7 @@ def getMaxScore(results):
 
 def getSentiment(text):
     tokenizer = RegexTokenizer()
+    #tokenizer = tokenizer.split(text)
     model = FastTextSocialNetworkModel(tokenizer=tokenizer)
     result = model.predict([text.lower()], k=1)
     return list(result[0].keys()).pop(0)
@@ -393,7 +382,6 @@ def addScore(answer, session, results):
     lastQ = dbConnection.getLastQuestion(session)
     type = int(dbConnection.getQuestionType(int(lastQ[0][0]))[0][0])
     if type == 1:
-        #todo мб поменять логику начисления очков
         result = getSentiment(answer)
         if result == 'positive':
             results['goodScore'] += 2

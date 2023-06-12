@@ -2,6 +2,15 @@ from getpass import getpass
 from mysql.connector import connect, Error
 
 
+def connectDB():
+    return connect(
+        host="localhost",
+        user="root",
+        password="anek",
+        database="aliceskill",
+    )
+
+
 def getIDTextQuestions():
     return getQByType(1)
 
@@ -32,12 +41,7 @@ def getIDRatingRigidityQuestions():
 
 def getQByType(id_type):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT id_question FROM aliceskill.questions WHERE id_type =" + str(id_type) + " ;"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -49,12 +53,7 @@ def getQByType(id_type):
 
 def getQuestion(id):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT text FROM aliceskill.questions WHERE id_question=" + str(id) + ";"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -66,12 +65,7 @@ def getQuestion(id):
 
 def getUsedQuestionIDs(id_session):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT id_question FROM aliceskill.sessionstoquestions WHERE id_session='" + str(id_session) + "';"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -83,12 +77,7 @@ def getUsedQuestionIDs(id_session):
 
 def getQuestionType(id):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT id_type FROM aliceskill.questions WHERE id_question=" + str(id) + ";"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -100,12 +89,7 @@ def getQuestionType(id):
 
 def getUsers():
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT id_user FROM aliceskill.users;"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -117,12 +101,7 @@ def getUsers():
 
 def addUser(id_user):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "INSERT into aliceskill.users (id_user) VALUES ('" + str(id_user) + "');"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -133,12 +112,7 @@ def addUser(id_user):
 
 def addResult(good, neutral, bad, anx, fr, aggr, rig):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "INSERT into aliceskill.results (goodScore, neutralScore, badScore, anxiety, frustration," \
                     "aggressiveness, rigidity) " \
                     "VALUES (" + str(good) + "," + str(neutral) + "," + str(bad) + "," + str(anx) + "," + str(
@@ -152,12 +126,7 @@ def addResult(good, neutral, bad, anx, fr, aggr, rig):
 
 def updateResult(id_res, good, neutral, bad, anx, fr, aggr, rig):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "UPDATE aliceskill.results SET goodScore=" + str(good) + ",neutralScore=" + str(neutral) + \
                     ",badScore=" + str(bad) + ",anxiety=" + str(anx) + ",frustration=" + str(fr) + \
                     ",aggressiveness=" + str(aggr) + ", rigidity=" + str(rig) + " WHERE id_result=" + str(id_res) + ";"
@@ -170,12 +139,7 @@ def updateResult(id_res, good, neutral, bad, anx, fr, aggr, rig):
 
 def getResult(id_session):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT id_result FROM aliceskill.sessions WHERE id_session='" + id_session + "';"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -187,12 +151,7 @@ def getResult(id_session):
 
 def getLastResult():
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT id_result FROM aliceskill.results ORDER BY id_result DESC LIMIT 1;"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -204,12 +163,7 @@ def getLastResult():
 
 def addSession(id_session, new, datetime, id_user, id_result, isFinished, id_lastQuestion, answerNumber):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "INSERT into aliceskill.sessions (id_session, new, dateTime, id_user, id_result,isFinished, id_lastQuestion, answerNumber) " \
                     "VALUES ('" + str(id_session) + "'," + str(new) + ",'" + str(datetime) + "','" + str(
                 id_user) + "'," + str(id_result) + "," + str(isFinished) + "," + str(id_lastQuestion) + "," + str(
@@ -223,12 +177,7 @@ def addSession(id_session, new, datetime, id_user, id_result, isFinished, id_las
 
 def updateSession(id_session, new, isFinished, answerNumber):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "UPDATE aliceskill.sessions SET new=" + str(new) + ",isFinished=" + str(
                 isFinished) + ",answerNumber=" + str(answerNumber) + \
                     " WHERE id_session='" + str(id_session) + "';"
@@ -241,12 +190,7 @@ def updateSession(id_session, new, isFinished, answerNumber):
 
 def addUsedQuestion(id_session, id_question):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "INSERT into aliceskill.sessionstoquestions (id_session,id_question) VALUES ('" + str(
                 id_session) + "'," + str(id_question) + ");"
             with connection.cursor() as cursor:
@@ -258,12 +202,7 @@ def addUsedQuestion(id_session, id_question):
 
 def updateLastQuestionID(session, id):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "UPDATE aliceskill.sessions SET id_lastQuestion=" + str(id) + \
                     " WHERE id_session='" + str(session) + "';"
             with connection.cursor() as cursor:
@@ -275,12 +214,7 @@ def updateLastQuestionID(session, id):
 
 def getLastQuestion(session):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT id_lastQuestion FROM aliceskill.sessions WHERE id_session='" + str(session) + "';"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -292,12 +226,7 @@ def getLastQuestion(session):
 
 def getAnswerNumber(session):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT answerNumber FROM aliceskill.sessions WHERE id_session='" + str(session) + "';"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -309,12 +238,7 @@ def getAnswerNumber(session):
 
 def getResults(session):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT goodScore, neutralScore, badScore, anxiety, frustration, aggressiveness, rigidity FROM aliceskill.results WHERE id_result='" + str(
                 int(getResult(session)[0][0])) + "';"
             with connection.cursor() as cursor:
@@ -327,12 +251,7 @@ def getResults(session):
 
 def addFinalResult(session, finalResult):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "UPDATE aliceskill.sessions SET finalResult='" + str(finalResult) + \
                     "' WHERE id_session='" + str(session) + "';"
             with connection.cursor() as cursor:
@@ -345,35 +264,38 @@ def addFinalResult(session, finalResult):
 def getGreetings():
     return getAnswerByType(1)
 
+
 def getGoodbye():
     return getAnswerByType(14)
+
 
 def getConclusion():
     return getAnswerByType(2)
 
+
 def getGoodResult():
     return getAnswerByType(5)
+
 
 def getNeutralResult():
     return getAnswerByType(6)
 
+
 def getNegativeResult():
     return getAnswerByType(7)
+
 
 def getMethodic():
     return getAnswerByType(15)
 
+
 def getEnd():
     return getAnswerByType(17)
 
+
 def getAnswerByType(id_type):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT id_answer FROM aliceskill.answers WHERE id_type =" + str(id_type) + " ;"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -385,12 +307,7 @@ def getAnswerByType(id_type):
 
 def getAnswer(id):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
+        with connectDB() as connection:
             query = "SELECT text FROM aliceskill.answers WHERE id_answer=" + str(id) + ";"
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -402,13 +319,9 @@ def getAnswer(id):
 
 def getStatistic(id_user):
     try:
-        with connect(
-                host="localhost",
-                user="root",
-                password="anek",
-                database="aliceskill",
-        ) as connection:
-            query = "SELECT dateTime, finalResult FROM aliceskill.sessions WHERE isFinished=1 AND finalResult IS NOT NULL AND id_user='" + str(id_user) + "'ORDER BY id_result;"
+        with connectDB() as connection:
+            query = "SELECT dateTime, finalResult FROM aliceskill.sessions WHERE isFinished=1 AND finalResult IS NOT NULL AND id_user='" + str(
+                id_user) + "'ORDER BY id_result;"
             with connection.cursor() as cursor:
                 cursor.execute(query)
                 result = cursor.fetchall()
